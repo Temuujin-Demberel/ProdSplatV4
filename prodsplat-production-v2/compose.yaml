@@ -1,0 +1,59 @@
+name: prodsplat
+
+services:
+  app:
+    build:
+      context: .
+      target: app-runtime
+    environment:
+      APP_PORT: "8080"
+      WORKSPACE: ${WORKSPACE:-/workspace}
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN}
+      TASK_LEASE_SECONDS: ${TASK_LEASE_SECONDS:-45}
+      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-4294967296}
+      DEFAULT_PROFILE: ${DEFAULT_PROFILE:-balanced}
+    ports:
+      - "127.0.0.1:${APP_PORT:-8080}:8080"
+    volumes:
+      - ./workspace:/workspace
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      target: worker-runtime
+    environment:
+      APP_INTERNAL_URL: ${APP_INTERNAL_URL:-http://app:8080}
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN}
+      WORKSPACE: ${WORKSPACE:-/workspace}
+      WORKER_POLL_SECONDS: ${WORKER_POLL_SECONDS:-2}
+      WORKER_HEARTBEAT_SECONDS: ${WORKER_HEARTBEAT_SECONDS:-5}
+      PRODSPLAT_GPU_INDEX: ${PRODSPLAT_GPU_INDEX:-0}
+      PRODSPLAT_MAX_NUM_MATCHES: ${PRODSPLAT_MAX_NUM_MATCHES:-32768}
+      PRODSPLAT_COLMAP_CPU_FALLBACK: ${PRODSPLAT_COLMAP_CPU_FALLBACK:-1}
+    volumes:
+      - ./workspace:/workspace
+      - nerfstudio-cache:/root/.cache
+    shm_size: "6gb"
+    gpus: all
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import pathlib,time; p=pathlib.Path('/tmp/prodsplat-worker-heartbeat'); raise SystemExit(0 if p.exists() and time.time()-p.stat().st_mtime < 30 else 1)"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+volumes:
+  nerfstudio-cache:

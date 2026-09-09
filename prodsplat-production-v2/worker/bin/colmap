@@ -1,0 +1,135 @@
+#!/usr/bin/env python3
+"""ProdSplat COLMAP compatibility wrapper.
+
+Keeps COLMAP SIFT extraction and matching GPU-first, explicitly supplies the
+COLMAP 3.9.x matching limit, and retries only the matching stage on CPU for a
+small set of known SiftGPU/CUDA failures. All unrelated COLMAP failures are
+returned unchanged so bad captures and real configuration errors are visible.
+"""
+from __future__ import annotations
+
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+
+REAL_COLMAP = os.environ.get("PRODSPLAT_REAL_COLMAP", "/usr/local/bin/colmap")
+GPU_INDEX = os.environ.get("PRODSPLAT_GPU_INDEX", "0")
+MAX_MATCHES = os.environ.get("PRODSPLAT_MAX_NUM_MATCHES", "32768")
+CPU_FALLBACK = os.environ.get("PRODSPLAT_COLMAP_CPU_FALLBACK", "1").lower() not in {
+    "0",
+    "false",
+    "no",
+    "off",
+}
+
+MATCHERS = {"sequential_matcher", "exhaustive_matcher", "vocab_tree_matcher"}
+KNOWN_GPU_FAILURE = re.compile(
+    r"max_num_matches\s*>\s*0|SiftGPU|VerifyContextGL|CUDA_ERROR|cudaError|"
+    r"CUDA[^\n]*out of memory|out of memory",
+    re.IGNORECASE,
+)
+
+
+def set_option(args: list[str], key: str, value: str) -> list[str]:
+    """Replace a COLMAP --key value / --key=value option, or append it."""
+    out: list[str] = []
+    found = False
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg == key:
+            out.extend((key, value))
+            found = True
+            i += 2 if i + 1 < len(args) else 1
+            continue
+        if arg.startswith(key + "="):
+            out.append(f"{key}={value}")
+            found = True
+            i += 1
+            continue
+        out.append(arg)
+        i += 1
+    if not found:
+        out.extend((key, value))
+    return out
+
+
+def run_streaming(args: list[str]) -> tuple[int, bool]:
+    """Run COLMAP, stream combined output, and flag known GPU failures."""
+    proc = subprocess.Popen(
+        [REAL_COLMAP, *args],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+    )
+    known_gpu_failure = False
+    assert proc.stdout is not None
+    for line in proc.stdout:
+        sys.stdout.write(line)
+        sys.stdout.flush()
+        if KNOWN_GPU_FAILURE.search(line):
+            known_gpu_failure = True
+    return proc.wait(), known_gpu_failure
+
+
+def main() -> int:
+    if not Path(REAL_COLMAP).is_file():
+        print(f"[ProdSplat] real COLMAP binary not found: {REAL_COLMAP}", file=sys.stderr)
+        return 127
+
+    args = sys.argv[1:]
+    if not args:
+        return subprocess.call([REAL_COLMAP])
+
+    subcommand = args[0]
+
+    # Make the feature-extraction GPU choice explicit rather than relying on a
+    # transitive default in Nerfstudio/COLMAP.
+    if subcommand == "feature_extractor":
+        gpu_args = set_option(args, "--SiftExtraction.use_gpu", "1")
+        gpu_args = set_option(gpu_args, "--SiftExtraction.gpu_index", GPU_INDEX)
+        print(f"[ProdSplat] COLMAP SIFT extraction: GPU {GPU_INDEX}", flush=True)
+        return subprocess.call([REAL_COLMAP, *gpu_args])
+
+    if subcommand in MATCHERS:
+        gpu_args = set_option(args, "--SiftMatching.use_gpu", "1")
+        gpu_args = set_option(gpu_args, "--SiftMatching.gpu_index", GPU_INDEX)
+        gpu_args = set_option(gpu_args, "--SiftMatching.max_num_matches", MAX_MATCHES)
+
+        print(
+            f"[ProdSplat] COLMAP {subcommand}: GPU {GPU_INDEX}, "
+            f"max_num_matches={MAX_MATCHES}",
+            flush=True,
+        )
+        rc, known_gpu_failure = run_streaming(gpu_args)
+        if rc == 0:
+            return 0
+
+        if not (CPU_FALLBACK and known_gpu_failure):
+            if not known_gpu_failure:
+                print(
+                    "[ProdSplat] COLMAP failed for a non-GPU reason; "
+                    "CPU fallback will not hide it.",
+                    file=sys.stderr,
+                    flush=True,
+                )
+            return rc
+
+        print(
+            "[ProdSplat] Known SiftGPU/CUDA matcher failure detected; "
+            "retrying only this matching stage on CPU.",
+            file=sys.stderr,
+            flush=True,
+        )
+        cpu_args = set_option(gpu_args, "--SiftMatching.use_gpu", "0")
+        return subprocess.call([REAL_COLMAP, *cpu_args])
+
+    # Mapper, bundle adjustment, version/help, etc. use the upstream binary.
+    return subprocess.call([REAL_COLMAP, *args])
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,9 @@
+.git
+.github
+.env
+workspace/*
+!workspace/.gitkeep
+**/__pycache__
+**/.pytest_cache
+*.zip
+*.log

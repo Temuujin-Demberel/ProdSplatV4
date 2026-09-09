@@ -1,0 +1,8 @@
+.env
+workspace/jobs/
+workspace/tasks/
+workspace/runtime/
+*.log
+__pycache__/
+.pytest_cache/
+.DS_Store

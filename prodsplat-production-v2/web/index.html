@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ProdSplat</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">LOCAL 3DGS PRODUCTION PIPELINE</div>
+        <h1>ProdSplat</h1>
+        <p>Capture → reconstruct → review → edit → transparent render → synthetic dataset.</p>
+      </div>
+      <div id="workerBadge" class="badge offline">Worker connecting…</div>
+    </header>
+
+    <section class="card create-card">
+      <div>
+        <h2>New product job</h2>
+        <p>Create the durable job first, then choose a video reconstruction or an existing Gaussian-splat PLY.</p>
+      </div>
+      <div class="create-row">
+        <input id="jobName" autocomplete="off" placeholder="e.g. Orgiluun Tropical Can">
+        <button id="createJob" class="primary">Create job</button>
+      </div>
+    </section>
+
+    <div id="globalMessage" class="global-message"></div>
+    <section id="jobs" class="jobs"></section>
+  </div>
+
+  <template id="jobTemplate">
+    <article class="card job">
+      <div class="job-title-row">
+        <div>
+          <div class="state-line"><span class="state"></span><span class="progressText"></span></div>
+          <h2 class="name"></h2>
+          <code class="id"></code>
+        </div>
+        <div class="job-top-actions">
+          <button class="refreshJob subtle">Refresh</button>
+          <button class="cancel danger">Cancel active task</button>
+        </div>
+      </div>
+      <div class="progress-track"><div class="progress-bar"></div></div>
+      <p class="message"></p>
+      <pre class="error"></pre>
+
+      <div class="grid two">
+        <section class="subcard">
+          <h3>1 · Input / reconstruction</h3>
+          <label>Reconstruction profile
+            <select class="profile"></select>
+          </label>
+          <label>New product video
+            <input class="video" type="file" accept="video/*,.mp4,.mov,.m4v,.mkv,.webm">
+          </label>
+          <button class="uploadVideo">Upload as new attempt</button>
+          <div class="uploadStatus small"></div>
+          <div class="divider">or</div>
+          <label>Existing Gaussian-splat PLY
+            <input class="ply" type="file" accept=".ply">
+          </label>
+          <button class="uploadPly">Upload 3DGS PLY</button>
+        </section>
+
+        <section class="subcard">
+          <h3>2 · Review / cleanup</h3>
+          <p class="small">Review the active attempt in the pinned SuperSplat editor. Edits are saved back to the job as <code>cleaned.ply</code>.</p>
+          <button class="openEditor primary">Open active splat in SuperSplat</button>
+          <label>Fallback: upload an already-edited PLY
+            <input class="cleaned" type="file" accept=".ply">
+          </label>
+          <button class="uploadCleaned">Upload cleaned PLY</button>
+        </section>
+
+        <section class="subcard">
+          <h3>3 · Transparent views</h3>
+          <p class="small">Renders two 16-view rings with direct Gaussian alpha.</p>
+          <button class="render">Render 32 RGBA PNGs</button>
+          <div class="previewGrid"></div>
+        </section>
+
+        <section class="subcard">
+          <h3>4 · Synthetic detector data</h3>
+          <label>Shelf / scene backgrounds
+            <input class="backgrounds" type="file" multiple accept=".jpg,.jpeg,.png,.webp">
+          </label>
+          <button class="uploadBackgrounds">Upload backgrounds</button>
+          <button class="dataset">Generate YOLO dataset</button>
+          <a class="download primary-link" target="_blank">Download dataset.zip</a>
+        </section>
+      </div>
+
+      <details>
+        <summary>Attempts & task logs</summary>
+        <div class="attempts"></div>
+        <div class="tasks"></div>
+      </details>
+    </article>
+  </template>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

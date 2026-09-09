@@ -1,0 +1,53 @@
+name: CI
+on:
+  push:
+  pull_request:
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+      - run: cd app && gofmt -w . && git diff --exit-code && go test -timeout 30s ./...
+
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - run: pip install 'numpy<2' Pillow pytest
+      - run: python -m compileall -q worker/prodsplat
+      - run: python -m pytest -q worker/tests
+
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check web/app.js
+      - run: bash -n product-scan.sh stop.sh editor-integration/inject.sh
+
+  supersplat-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: |
+          git clone https://github.com/playcanvas/supersplat.git /tmp/supersplat
+          cd /tmp/supersplat
+          git checkout e060989b202548848eb440a5005cd41a8b26f7db
+          cp "$GITHUB_WORKSPACE/editor-integration/product-integration.ts" src/product-integration.ts
+          cp "$GITHUB_WORKSPACE/editor-integration/inject.sh" /tmp/inject.sh
+          chmod +x /tmp/inject.sh
+          /tmp/inject.sh
+          npm ci
+          npm run build
