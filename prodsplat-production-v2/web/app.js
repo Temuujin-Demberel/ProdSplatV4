@@ -1,5 +1,9 @@
 const $ = (selector, root = document) => root.querySelector(selector);
 const state = { system: null, profiles: {}, jobs: [] };
+const FRONT_AZIMUTHS = Array.from({ length: 16 }, (_, i) => i * 22.5);
+const UP_AXES = ['+z', '-z', '+y', '-y', '+x', '-x'];
+const renderDrafts = new Map();
+const manifestCache = new Map();
 let refreshTimer = null;
 
 async function api(path, options = {}) {
@@ -87,6 +91,47 @@ function profileOptions(select, selected = 'balanced') {
   }));
 }
 
+function fillSelect(select, values, selected, label = value => String(value)) {
+  select.replaceChildren(...values.map(value => {
+    const option = document.createElement('option'); option.value = String(value); option.textContent = label(value);
+    option.selected = String(value) === String(selected); return option;
+  }));
+}
+
+function defaultAssetName(name) {
+  return (name || '').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+}
+
+function renderFormValues(root) {
+  return {
+    assetName: $('.assetName', root).value.trim(),
+    upAxis: $('.upAxis', root).value,
+    frontAzimuthDegrees: Number($('.frontAzimuth', root).value),
+  };
+}
+
+function renderStamp(job) {
+  return job.attempts?.find(a => a.number === job.activeAttempt)?.updatedAt || String(job.revision);
+}
+
+function loadManifest(job) {
+  const stamp = renderStamp(job);
+  const cached = manifestCache.get(job.id);
+  if (cached && cached.stamp === stamp) return cached.promise;
+  const promise = api(`/api/jobs/${job.id}/renders/render_manifest.json?r=${encodeURIComponent(stamp)}`)
+    .catch(error => { manifestCache.delete(job.id); throw error; });
+  manifestCache.set(job.id, { stamp, promise });
+  return promise;
+}
+
+function viewCaption(view) {
+  if (view.azimuthLabel === undefined || view.elevationDegrees === undefined) {
+    return `${view.ring ?? 'view'} ${view.index ?? ''}`.trim();
+  }
+  const elevation = Math.round(view.elevationDegrees);
+  return `az ${view.azimuthLabel} · el ${elevation < 0 ? '-' : '+'}${Math.abs(elevation)}`;
+}
+
 function renderAttempts(root, job) {
   const box = $('.attempts', root);
   if (!job.attempts?.length) { box.textContent = 'No attempts yet.'; return; }
@@ -124,13 +169,24 @@ async function renderTasks(root, job) {
   } catch (e) { box.textContent = `Unable to load tasks: ${e.message}`; }
 }
 
-function renderPreviews(root, job) {
+async function renderPreviews(root, job) {
   const box = $('.previewGrid', root); box.replaceChildren();
   if (!['RENDER_READY','DATASET_BUILDING','COMPLETED'].includes(job.state)) return;
-  const names = ['eye_00.png','eye_02.png','eye_04.png','eye_06.png','upper_00.png','upper_02.png','upper_04.png','upper_06.png'];
-  for (const name of names) {
-    const img = document.createElement('img'); img.loading = 'lazy'; img.alt = name; img.src = `/api/jobs/${job.id}/renders/${name}?r=${job.revision}`; box.append(img);
-  }
+  let manifest;
+  try { manifest = await loadManifest(job); }
+  catch (error) { box.textContent = `Preview unavailable: ${error.message}`; return; }
+  const stamp = encodeURIComponent(renderStamp(job));
+  const views = (manifest?.views || []).slice().sort((a, b) =>
+    ((b.elevationDegrees ?? 0) - (a.elevationDegrees ?? 0)) ||
+    ((a.azimuthDegrees ?? a.index ?? 0) - (b.azimuthDegrees ?? b.index ?? 0)));
+  box.replaceChildren(...views.map(view => {
+    const figure = document.createElement('figure'); figure.className = 'preview';
+    const img = document.createElement('img'); img.loading = 'lazy'; img.alt = view.file;
+    img.src = `/api/jobs/${job.id}/renders/${encodeURIComponent(view.file)}?r=${stamp}`;
+    const caption = document.createElement('figcaption'); caption.textContent = viewCaption(view);
+    figure.append(img, caption);
+    return figure;
+  }));
 }
 
 function jobNode(job) {
@@ -158,14 +214,29 @@ function jobNode(job) {
   bind(root,'.openEditor',async()=>{
     const active=job.attempts?.find(a=>a.number===job.activeAttempt);
     if(!active?.splatPath && !job.cleanedPath)throw new Error('No active splat is ready.');
-    const load=job.cleanedPath?`/api/jobs/${job.id}/cleaned`:`/api/jobs/${job.id}/splat`;
+    const load=job.cleanedPath?`/api/jobs/${job.id}/cleaned.ply`:`/api/jobs/${job.id}/splat.ply`;
     window.open(`/editor/?job=${encodeURIComponent(job.id)}&load=${encodeURIComponent(load)}`,'_blank','noopener');
   });
   bind(root,'.uploadCleaned',async()=>{
     const input=$('.cleaned',root); const file=input.files[0]; if(!file)throw new Error('Choose a cleaned Gaussian PLY.');
     await api(`/api/jobs/${job.id}/cleaned`,{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file}); input.value='';
   });
-  bind(root,'.render',()=>api(`/api/jobs/${job.id}/render`,{method:'POST'}));
+
+  const options = renderDrafts.get(job.id) || job.renderOptions || {};
+  const assetName = $('.assetName', root);
+  assetName.value = options.assetName || defaultAssetName(job.name);
+  fillSelect($('.upAxis', root), UP_AXES, options.upAxis || '+z');
+  fillSelect($('.frontAzimuth', root), FRONT_AZIMUTHS, options.frontAzimuthDegrees ?? 0, value => `${value}°`);
+  const rememberDraft = () => renderDrafts.set(job.id, renderFormValues(root));
+  assetName.oninput = rememberDraft;
+  $('.upAxis', root).onchange = rememberDraft;
+  $('.frontAzimuth', root).onchange = rememberDraft;
+  bind(root,'.render',async()=>{
+    const body = renderFormValues(root);
+    await api(`/api/jobs/${job.id}/render`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    renderDrafts.delete(job.id);
+  });
+
   bind(root,'.uploadBackgrounds',async()=>{
     const input=$('.backgrounds',root); const files=[...input.files]; if(!files.length)throw new Error('Choose at least one background image.');
     await uploadForm(`/api/jobs/${job.id}/backgrounds`,{}, {files}); input.value='';
@@ -173,7 +244,7 @@ function jobNode(job) {
   bind(root,'.dataset',()=>api(`/api/jobs/${job.id}/dataset`,{method:'POST'}));
 
   const dl=$('.download',root);dl.href=`/api/jobs/${job.id}/dataset.zip`;dl.style.display=job.datasetZip?'block':'none';
-  renderAttempts(root,job); renderPreviews(root,job); void renderTasks(root,job);
+  renderAttempts(root,job); void renderPreviews(root,job); void renderTasks(root,job);
   return root;
 }
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -201,6 +202,10 @@ func (s *Service) ActivateAttempt(ctx context.Context, id string, number int) (*
 	job.CleanedPath = selected.CleanedPath
 	job.RenderDir = selected.RenderDir
 	job.DatasetZip = selected.DatasetZip
+	if selected.RenderOptions != nil {
+		options := *selected.RenderOptions
+		job.RenderOptions = &options
+	}
 	job.Error = ""
 	job.Progress = 1
 	if selected.DatasetZip != "" {
@@ -269,7 +274,7 @@ func (s *Service) SaveCleaned(ctx context.Context, id, stagedPath string) (*Job,
 	return job, nil
 }
 
-func (s *Service) StartRender(ctx context.Context, id string) (*Job, error) {
+func (s *Service) StartRender(ctx context.Context, id string, requested *RenderOptions) (*Job, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	job, err := s.jobs.FindByID(ctx, id)
@@ -282,21 +287,42 @@ func (s *Service) StartRender(ctx context.Context, id string) (*Job, error) {
 	if job.CurrentTaskID != "" && (job.State == StateRendering || job.State == StateDatasetBuilding || job.State == StateReconstructing) {
 		return nil, errors.New("job already has an active processing task")
 	}
+	effective := RenderOptions{}
+	if requested != nil {
+		effective = *requested
+	} else if job.RenderOptions != nil {
+		effective = *job.RenderOptions
+	}
+	resolved, err := ResolveRenderOptions(job.Name, effective)
+	if err != nil {
+		return nil, err
+	}
 	now := time.Now().UTC()
 	taskID := newID("task")
 	renderDir := filepath.Join(s.store.AttemptDir(id, job.ActiveAttempt), "renders")
-	task := &tasks.Task{ID: taskID, JobID: id, Attempt: job.ActiveAttempt, Type: tasks.TypeRender, State: tasks.StateReady, Payload: map[string]string{"splatPath": job.CleanedPath, "renderDir": renderDir}, MaxAttempts: 2, LogPath: s.store.TaskLogPath(id, taskID), CreatedAt: now, UpdatedAt: now}
+	payload := map[string]string{
+		"splatPath":           job.CleanedPath,
+		"renderDir":           renderDir,
+		"assetName":           resolved.AssetName,
+		"upAxis":              resolved.UpAxis,
+		"frontAzimuthDegrees": strconv.FormatFloat(resolved.FrontAzimuthDegrees, 'f', -1, 64),
+	}
+	task := &tasks.Task{ID: taskID, JobID: id, Attempt: job.ActiveAttempt, Type: tasks.TypeRender, State: tasks.StateReady, Payload: payload, MaxAttempts: 2, LogPath: s.store.TaskLogPath(id, taskID), CreatedAt: now, UpdatedAt: now}
 	if err := s.tasks.Create(ctx, task); err != nil {
 		return nil, err
 	}
 	job.RenderDir = renderDir
 	job.DatasetZip = ""
+	jobOptions := resolved
+	job.RenderOptions = &jobOptions
 	if a := job.ActiveAttemptRef(); a != nil {
 		a.DatasetZip = ""
+		attemptOptions := resolved
+		a.RenderOptions = &attemptOptions
 	}
 	job.State = StateRendering
 	job.Progress = 0
-	job.Message = "transparent rendering queued"
+	job.Message = fmt.Sprintf("transparent rendering queued (%s, up %s, front %g°)", resolved.AssetName, resolved.UpAxis, resolved.FrontAzimuthDegrees)
 	job.Error = ""
 	job.CurrentTaskID = taskID
 	job.CancelRequested = false

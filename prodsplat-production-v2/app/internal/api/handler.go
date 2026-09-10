@@ -325,7 +325,17 @@ func (h *Handler) SaveCleaned(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) StartRender(w http.ResponseWriter, r *http.Request) {
-	job, err := h.jobs.StartRender(r.Context(), r.PathValue("id"))
+	var body jobs.RenderOptions
+	var requested *jobs.RenderOptions
+	switch err := decodeJSON(r, &body); {
+	case errors.Is(err, io.EOF):
+	case err != nil:
+		badRequest(w, err)
+		return
+	default:
+		requested = &body
+	}
+	job, err := h.jobs.StartRender(r.Context(), r.PathValue("id"), requested)
 	if err != nil {
 		badRequest(w, err)
 		return
@@ -448,7 +458,8 @@ func (h *Handler) RenderAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := filepath.Base(r.PathValue("name"))
-	if name != r.PathValue("name") || !strings.HasSuffix(strings.ToLower(name), ".png") {
+	isPNG := strings.HasSuffix(strings.ToLower(name), ".png")
+	if name != r.PathValue("name") || !(isPNG || name == "render_manifest.json") {
 		http.Error(w, "invalid render name", 400)
 		return
 	}

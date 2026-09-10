@@ -16,6 +16,7 @@ PLY_DTYPES = {
 @dataclass
 class GaussianPLY:
     values: dict[str, np.ndarray]
+    dropped_count: int = 0
 
     def require(self, name: str) -> np.ndarray:
         if name not in self.values:
@@ -118,7 +119,12 @@ def read_gaussian_ply(path: str | Path) -> GaussianPLY:
         else:
             raise ValueError(f"unsupported PLY format: {fmt}")
 
+    finite = np.ones(vertex_count, dtype=bool)
     for key in required:
-        if not np.isfinite(values[key]).all():
-            raise ValueError(f"non-finite values in required property {key}")
-    return GaussianPLY(values)
+        finite &= np.isfinite(values[key])
+    if not finite.any():
+        raise ValueError("every Gaussian has a non-finite value in a required property")
+    dropped = int(vertex_count - finite.sum())
+    if dropped:
+        values = {name: array[finite] for name, array in values.items()}
+    return GaussianPLY(values, dropped)

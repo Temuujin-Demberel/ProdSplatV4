@@ -26,7 +26,7 @@ RUN npm ci && npm run build \
 # Compile the Go control plane. It intentionally has zero third-party Go deps.
 # -----------------------------------------------------------------------------
 FROM golang:1.23-bookworm AS go-build
-ARG APP_VERSION=2.0.5
+ARG APP_VERSION=2.0.6
 ARG APP_COMMIT=local
 WORKDIR /src/app
 COPY app/go.mod app/go.sum ./

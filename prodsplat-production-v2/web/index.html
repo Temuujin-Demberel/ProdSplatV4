@@ -79,8 +79,19 @@
 
         <section class="subcard">
           <h3>3 · Transparent views</h3>
-          <p class="small">Renders two 16-view rings with direct Gaussian alpha.</p>
-          <button class="render">Render 32 RGBA PNGs</button>
+          <p class="small">Renders three elevation rings (−30°, 0°, +30°) × 16 azimuths with direct Gaussian alpha, named for apu-synth: <code>name__az045_el+30.png</code>. Positive azimuth shows the product's right side; positive elevation looks down from above.</p>
+          <label>Asset name (apu-synth class name)
+            <input class="assetName" autocomplete="off" spellcheck="false" placeholder="e.g. orgiluun_lemon_lime_Pet">
+          </label>
+          <div class="optionRow">
+            <label>Up axis
+              <select class="upAxis"></select>
+            </label>
+            <label title="Azimuth label of the view that currently shows the product's front; re-render to make it az000">Front azimuth
+              <select class="frontAzimuth"></select>
+            </label>
+          </div>
+          <button class="render">Render 48 RGBA views</button>
           <div class="previewGrid"></div>
         </section>
 

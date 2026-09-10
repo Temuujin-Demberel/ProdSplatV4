@@ -51,7 +51,7 @@ const registerProductIntegration = (events: Events) => {
     title.innerHTML = `<strong style="font:600 13px system-ui;color:#fff">ProdSplat review</strong><br><span style="font:11px monospace;color:#9eb0c2">${jobId}</span>`;
 
     const hint = document.createElement('div');
-    hint.textContent = 'Clean the product with SuperSplat selection/delete/transform tools, then save the edited Gaussian asset.';
+    hint.textContent = 'Clean the product with SuperSplat selection/delete/transform tools, then save the edited Gaussian asset. Asset name, up axis and front azimuth come from the dashboard\'s last render settings.';
     Object.assign(hint.style, {font:'11px/1.4 system-ui', color:'#b8c0ca'});
 
     const status = document.createElement('div');
@@ -62,7 +62,7 @@ const registerProductIntegration = (events: Events) => {
     styleButton(save, true);
 
     const render = document.createElement('button');
-    render.textContent = 'Save + Render 32 RGBA Views';
+    render.textContent = 'Save + Render 48 RGBA Views';
     styleButton(render);
 
     const dashboard = document.createElement('button');

@@ -76,20 +76,18 @@ func doJSON(t *testing.T, method, url string, body any, token string) *http.Resp
 	return resp
 }
 
-func TestCreateJobRejectsBlankName(t *testing.T) {
-	server, _ := setupTestAPI(t)
-	defer server.Close()
-	resp := doJSON(t, "POST", server.URL+"/api/jobs", map[string]string{"name": "   "}, "")
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("create blank-name status %d, want %d", resp.StatusCode, http.StatusBadRequest)
+func doGET(t *testing.T, url string) *http.Response {
+	t.Helper()
+	resp, err := http.Get(url)
+	if err != nil {
+		t.Fatal(err)
 	}
+	return resp
 }
 
-func TestExistingPLYToDurableRenderTask(t *testing.T) {
-	server, service := setupTestAPI(t)
-	defer server.Close()
-	resp := doJSON(t, "POST", server.URL+"/api/jobs", map[string]string{"name": "Bottle"}, "")
+func cleanedJob(t *testing.T, server *httptest.Server, name string) jobs.Job {
+	t.Helper()
+	resp := doJSON(t, "POST", server.URL+"/api/jobs", map[string]string{"name": name}, "")
 	if resp.StatusCode != 201 {
 		t.Fatalf("create status %d", resp.StatusCode)
 	}
@@ -123,22 +121,48 @@ func TestExistingPLYToDurableRenderTask(t *testing.T) {
 		t.Fatalf("clean status %d", resp.StatusCode)
 	}
 	resp.Body.Close()
+	return job
+}
 
-	resp = doJSON(t, "POST", server.URL+"/api/jobs/"+job.ID+"/render", nil, "")
-	if resp.StatusCode != 202 {
-		t.Fatalf("render status %d", resp.StatusCode)
-	}
-	resp.Body.Close()
-
-	resp = doJSON(t, "POST", server.URL+"/internal/tasks/claim", map[string]string{"workerId": "w1"}, "secret")
+func claimTask(t *testing.T, server *httptest.Server) tasks.Task {
+	t.Helper()
+	resp := doJSON(t, "POST", server.URL+"/internal/tasks/claim", map[string]string{"workerId": "w1"}, "secret")
 	if resp.StatusCode != 200 {
 		t.Fatalf("claim status %d", resp.StatusCode)
 	}
 	var task tasks.Task
 	_ = json.NewDecoder(resp.Body).Decode(&task)
 	resp.Body.Close()
+	return task
+}
+
+func TestCreateJobRejectsBlankName(t *testing.T) {
+	server, _ := setupTestAPI(t)
+	defer server.Close()
+	resp := doJSON(t, "POST", server.URL+"/api/jobs", map[string]string{"name": "   "}, "")
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("create blank-name status %d, want %d", resp.StatusCode, http.StatusBadRequest)
+	}
+}
+
+func TestExistingPLYToDurableRenderTask(t *testing.T) {
+	server, service := setupTestAPI(t)
+	defer server.Close()
+	job := cleanedJob(t, server, "Bottle")
+
+	resp := doJSON(t, "POST", server.URL+"/api/jobs/"+job.ID+"/render", map[string]any{"assetName": "Bottle Test", "upAxis": "+y", "frontAzimuthDegrees": 45}, "")
+	if resp.StatusCode != 202 {
+		t.Fatalf("render status %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	task := claimTask(t, server)
 	if task.Type != tasks.TypeRender || task.JobID != job.ID {
 		t.Fatalf("wrong task %+v", task)
+	}
+	if task.Payload["assetName"] != "Bottle_Test" || task.Payload["upAxis"] != "+y" || task.Payload["frontAzimuthDegrees"] != "45" {
+		t.Fatalf("bad render payload %+v", task.Payload)
 	}
 
 	resp = doJSON(t, "POST", server.URL+"/internal/tasks/"+task.ID+"/heartbeat", map[string]any{"workerId": "w1", "progress": 0.5, "message": "half"}, "secret")
@@ -148,7 +172,7 @@ func TestExistingPLYToDurableRenderTask(t *testing.T) {
 	resp.Body.Close()
 
 	renderDir := task.Payload["renderDir"]
-	resp = doJSON(t, "POST", server.URL+"/internal/tasks/"+task.ID+"/complete", map[string]any{"workerId": "w1", "result": map[string]string{"renderDir": renderDir, "viewCount": "32"}, "message": "done"}, "secret")
+	resp = doJSON(t, "POST", server.URL+"/internal/tasks/"+task.ID+"/complete", map[string]any{"workerId": "w1", "result": map[string]string{"renderDir": renderDir, "viewCount": "48", "assetName": "Bottle_Test"}, "message": "done"}, "secret")
 	if resp.StatusCode != 200 {
 		t.Fatalf("complete status %d", resp.StatusCode)
 	}
@@ -163,5 +187,86 @@ func TestExistingPLYToDurableRenderTask(t *testing.T) {
 	}
 	if !strings.HasSuffix(filepath.ToSlash(got.CleanedPath), "/cleaned.ply") {
 		t.Fatalf("bad cleaned path %s", got.CleanedPath)
+	}
+	if got.RenderOptions == nil || got.RenderOptions.AssetName != "Bottle_Test" || got.RenderOptions.FrontAzimuthDegrees != 45 {
+		t.Fatalf("job render options not persisted: %+v", got.RenderOptions)
+	}
+	attempt := got.ActiveAttemptRef()
+	if attempt == nil || attempt.RenderOptions == nil || attempt.RenderOptions.UpAxis != "+y" {
+		t.Fatalf("attempt render options not persisted: %+v", attempt)
+	}
+}
+
+func TestStartRenderWithoutBodyUsesDefaults(t *testing.T) {
+	server, _ := setupTestAPI(t)
+	defer server.Close()
+	job := cleanedJob(t, server, "Bottle")
+
+	resp := doJSON(t, "POST", server.URL+"/api/jobs/"+job.ID+"/render", nil, "")
+	if resp.StatusCode != 202 {
+		t.Fatalf("render status %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	task := claimTask(t, server)
+	if task.Payload["assetName"] != "Bottle" || task.Payload["upAxis"] != "+z" || task.Payload["frontAzimuthDegrees"] != "0" {
+		t.Fatalf("bad default payload %+v", task.Payload)
+	}
+}
+
+func TestStartRenderRejectsInvalidOptions(t *testing.T) {
+	server, _ := setupTestAPI(t)
+	defer server.Close()
+	job := cleanedJob(t, server, "Bottle")
+
+	invalid := []map[string]any{
+		{"upAxis": "+w"},
+		{"frontAzimuthDegrees": 10},
+		{"assetName": "---"},
+		{"bogus": 1},
+	}
+	for _, body := range invalid {
+		resp := doJSON(t, "POST", server.URL+"/api/jobs/"+job.ID+"/render", body, "")
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("body %v: status %d, want 400", body, resp.StatusCode)
+		}
+	}
+}
+
+func TestPlyRoutesAndManifestName(t *testing.T) {
+	server, _ := setupTestAPI(t)
+	defer server.Close()
+	job := cleanedJob(t, server, "Bottle")
+
+	for _, path := range []string{"/splat.ply", "/cleaned.ply"} {
+		resp := doGET(t, server.URL+"/api/jobs/"+job.ID+path)
+		resp.Body.Close()
+		if resp.StatusCode != 200 || resp.Header.Get("Content-Type") != "application/octet-stream" {
+			t.Errorf("%s: status %d content-type %q", path, resp.StatusCode, resp.Header.Get("Content-Type"))
+		}
+	}
+
+	resp := doGET(t, server.URL+"/api/jobs/"+job.ID+"/renders/render_manifest.json")
+	resp.Body.Close()
+	if resp.StatusCode != 404 {
+		t.Fatalf("manifest before render: status %d, want 404", resp.StatusCode)
+	}
+
+	resp = doJSON(t, "POST", server.URL+"/api/jobs/"+job.ID+"/render", nil, "")
+	resp.Body.Close()
+	if resp.StatusCode != 202 {
+		t.Fatalf("render status %d", resp.StatusCode)
+	}
+
+	resp = doGET(t, server.URL+"/api/jobs/"+job.ID+"/renders/notes.txt")
+	resp.Body.Close()
+	if resp.StatusCode != 400 {
+		t.Errorf("notes.txt: status %d, want 400", resp.StatusCode)
+	}
+	resp = doGET(t, server.URL+"/api/jobs/"+job.ID+"/renders/render_manifest.json")
+	resp.Body.Close()
+	if resp.StatusCode != 404 {
+		t.Errorf("missing manifest: status %d, want 404", resp.StatusCode)
 	}
 }

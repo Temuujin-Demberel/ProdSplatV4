@@ -1,5 +1,9 @@
 # ProdSplat Production Pipeline
 
+## 2.0.6 apu-synth render grid release
+
+The transparent render step now produces 48 views: three elevation rings (−30°, 0°, +30°) of 16 azimuths each, so a product is seen the way a shelf camera sees it and never from directly above or below. Files are named `{assetName}__az{AAA}_el{±EE}.png`, the layout apu-synth's cutout loader reads, so a job's `renders/` folder can be copied straight into `cutouts/render/`. Positive azimuth shows the product's right side and positive elevation looks down from above. The dashboard's render step takes the asset (class) name, the up axis, and a front-azimuth offset, and its preview grid shows all 48 views with their angles so orientation can be corrected and re-rendered. Two fixes: the editor loads the splat through `.ply`-suffixed routes (SuperSplat refuses URLs without a recognised extension), and the launch scripts and COLMAP wrapper are committed with their executable bit.
+
 ## 2.0.5 adaptive reconstruction release
 
 The normal Ubuntu launch remains exactly `./product-scan.sh` (Windows: `.\product-scan.ps1`). Reconstruction is now duration-aware: profile frame counts are minimum baselines, long videos automatically receive denser frame sampling, weak sequential COLMAP models are retried with a denser sample, and a bounded exhaustive-matching rescue is available as a final automatic recovery path. The quality gate considers both registration ratio and absolute registered-camera count so dense sampling is not rejected by a ratio-only rule.
@@ -58,7 +62,7 @@ Durable RENDER task
    ↓
 gsplat direct-alpha renderer
    ↓
-32 straight-alpha RGBA PNGs
+48 straight-alpha RGBA PNGs (3 elevations × 16 azimuths, {assetName}__az{AAA}_el{±EE}.png)
    ↓
 Upload shelf/background imagery
    ↓
@@ -191,6 +195,10 @@ workspace/
 │           │   ├── splat.ply
 │           │   ├── cleaned.ply
 │           │   ├── renders/
+│           │   │   ├── orgiluun_lemon_lime_Pet__az000_el-30.png
+│           │   │   ├── orgiluun_lemon_lime_Pet__az000_el+00.png
+│           │   │   ├── orgiluun_lemon_lime_Pet__az023_el+30.png
+│           │   │   ├── … (48 views)
 │           │   │   └── render_manifest.json
 │           │   └── dataset/
 │           └── 002/

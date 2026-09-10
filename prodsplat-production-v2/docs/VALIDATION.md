@@ -23,7 +23,7 @@
 5. Confirm the attempt reaches `REVIEW_READY` and `splat.ply` exists.
 6. Open the splat in SuperSplat and perform selection/delete/transform operations.
 7. Save and confirm attempt-local `cleaned.ply` exists.
-8. Render and verify exactly 32 PNGs plus `render_manifest.json`.
+8. Render and verify exactly 48 PNGs named `{assetName}__az{AAA}_el{±EE}.png` plus `render_manifest.json`. Confirm `az000_el+00` shows the product front and `az090_el+00` its right side; if not, set the front azimuth to the label of the frontal view and re-render.
 9. Inspect PNG alpha in an image editor and composite against both light and dark backgrounds to detect dark-edge errors.
 10. Upload shelf backgrounds and create the dataset.
 11. Validate YOLO labels against generated images.

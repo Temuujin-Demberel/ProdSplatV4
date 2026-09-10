@@ -8,7 +8,7 @@ from .client import ControlPlane, LeaseLost
 from .dataset import build_yolo_dataset
 from .lease import Cancelled, LeaseGuard
 from .reconstruct import reconstruct
-from .render import render_rgba_views
+from .render import RenderOptions, render_rgba_views
 
 LOG = logging.getLogger(__name__)
 
@@ -40,9 +40,14 @@ class TaskRunner:
                 message = "reconstruction ready for review"
             elif task_type == "RENDER":
                 payload = task["payload"]
-                files = render_rgba_views(payload["splatPath"], payload["renderDir"], guard)
-                result = {"renderDir": payload["renderDir"], "viewCount": str(len(files))}
-                message = f"{len(files)} transparent views rendered"
+                options = RenderOptions.from_payload(payload)
+                files = render_rgba_views(payload["splatPath"], payload["renderDir"], guard, options)
+                result = {
+                    "renderDir": payload["renderDir"],
+                    "viewCount": str(len(files)),
+                    "assetName": options.asset_name,
+                }
+                message = f"{len(files)} transparent views rendered as {options.asset_name}__az*_el*.png"
             elif task_type == "DATASET":
                 payload = task["payload"]
                 zip_path, count = build_yolo_dataset(

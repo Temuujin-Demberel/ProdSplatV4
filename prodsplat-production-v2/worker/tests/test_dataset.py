@@ -18,7 +18,7 @@ def test_dataset_generation(tmp_path: Path):
     obj = Image.new("RGBA", (100, 200), (0, 0, 0, 0))
     draw = ImageDraw.Draw(obj)
     draw.rectangle((20, 10, 80, 190), fill=(255, 0, 0, 255))
-    obj.save(renders / "eye_00.png")
+    obj.save(renders / "sengur_can__az000_el+00.png")
     Image.new("RGB", (640, 480), (220, 220, 220)).save(backgrounds / "shelf.jpg")
 
     zip_path, count = build_yolo_dataset(str(renders), str(backgrounds), str(tmp_path / "dataset"), Guard(), copies_per_render=3)

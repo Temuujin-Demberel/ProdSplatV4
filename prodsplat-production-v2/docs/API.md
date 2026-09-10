@@ -13,11 +13,11 @@
 - `POST /api/jobs/{id}/video` — multipart `file`, optional `profile`
 - `POST /api/jobs/{id}/ply` — multipart `file`
 - `POST /api/jobs/{id}/attempts/{number}/activate`
-- `GET /api/jobs/{id}/splat`
+- `GET /api/jobs/{id}/splat` (alias `GET /api/jobs/{id}/splat.ply` for URL loaders that require the extension)
 - `POST /api/jobs/{id}/cleaned` — raw Gaussian PLY body
-- `GET /api/jobs/{id}/cleaned`
-- `POST /api/jobs/{id}/render`
-- `GET /api/jobs/{id}/renders/{name}`
+- `GET /api/jobs/{id}/cleaned` (alias `GET /api/jobs/{id}/cleaned.ply`)
+- `POST /api/jobs/{id}/render` — optional JSON `{assetName, upAxis, frontAzimuthDegrees}`; no body reuses the job's last options or the defaults (sanitized job name, `+z`, `0`)
+- `GET /api/jobs/{id}/renders/{name}` — `*.png` or `render_manifest.json`
 - `POST /api/jobs/{id}/backgrounds` — multipart repeated `files`
 - `POST /api/jobs/{id}/dataset`
 - `GET /api/jobs/{id}/dataset.zip`

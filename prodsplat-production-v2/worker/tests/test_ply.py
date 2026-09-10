@@ -27,3 +27,25 @@ def test_binary_gaussian_ply_and_sh(tmp_path: Path):
     assert ply.count == 1
     assert sh.shape == (1, 4, 3)
     assert degree == 1
+
+
+def test_non_finite_rows_are_dropped(tmp_path: Path):
+    path = tmp_path / "bad.ply"
+    props = ["x", "y", "z", "opacity", "scale_0", "scale_1", "scale_2", "rot_0", "rot_1", "rot_2", "rot_3"]
+    header = (
+        "ply\nformat binary_little_endian 1.0\n"
+        "element vertex 3\n" +
+        "".join(f"property float {p}\n" for p in props) +
+        "end_header\n"
+    ).encode()
+    rows = []
+    for opacity in (0.5, float("inf"), -1.0):
+        values = [0.0] * len(props)
+        values[props.index("opacity")] = opacity
+        values[props.index("rot_0")] = 1.0
+        rows.append(struct.pack("<" + "f" * len(values), *values))
+    path.write_bytes(header + b"".join(rows))
+    ply = read_gaussian_ply(path)
+    assert ply.count == 2
+    assert ply.dropped_count == 1
+    assert list(ply.require("opacity")) == [0.5, -1.0]
