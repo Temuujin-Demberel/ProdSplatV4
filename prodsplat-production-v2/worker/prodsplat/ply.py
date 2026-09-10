@@ -128,3 +128,23 @@ def read_gaussian_ply(path: str | Path) -> GaussianPLY:
     if dropped:
         values = {name: array[finite] for name, array in values.items()}
     return GaussianPLY(values, dropped)
+
+
+def write_gaussian_ply(values: dict[str, np.ndarray], path: str | Path) -> None:
+    path = Path(path)
+    names = list(values)
+    count = len(values[names[0]])
+    header = (
+        "ply\nformat binary_little_endian 1.0\n"
+        f"element vertex {count}\n"
+        + "".join(f"property float {name}\n" for name in names)
+        + "end_header\n"
+    )
+    table = np.empty(count, dtype=np.dtype([(name, "<f4") for name in names]))
+    for name in names:
+        table[name] = np.asarray(values[name], dtype=np.float32)
+    temp = path.with_name(path.name + ".partial")
+    with temp.open("wb") as f:
+        f.write(header.encode("ascii"))
+        table.tofile(f)
+    temp.replace(path)

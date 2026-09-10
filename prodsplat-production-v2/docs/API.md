@@ -16,7 +16,8 @@
 - `GET /api/jobs/{id}/splat` (alias `GET /api/jobs/{id}/splat.ply` for URL loaders that require the extension)
 - `POST /api/jobs/{id}/cleaned` — raw Gaussian PLY body
 - `GET /api/jobs/{id}/cleaned` (alias `GET /api/jobs/{id}/cleaned.ply`)
-- `POST /api/jobs/{id}/render` — optional JSON `{assetName, upAxis, frontAzimuthDegrees}`; no body reuses the job's last options or the defaults (sanitized job name, `+z`, `0`)
+- `GET /api/jobs/{id}/isolated.ply` — the auto-isolated asset produced by the last render with `isolate`
+- `POST /api/jobs/{id}/render` — optional JSON `{assetName, upAxis, frontAzimuthDegrees, isolate}`; no body reuses the job's last options or the defaults (sanitized job name, `+z`, `0`, `false`). With `isolate: true` a video attempt can be rendered without a cleaned PLY: the worker cuts the table, floor and surroundings away using the reconstruction cameras and writes `attempts/NNN/isolated.ply`
 - `GET /api/jobs/{id}/renders/{name}` — `*.png` or `render_manifest.json`
 - `POST /api/jobs/{id}/backgrounds` — multipart repeated `files`
 - `POST /api/jobs/{id}/dataset`

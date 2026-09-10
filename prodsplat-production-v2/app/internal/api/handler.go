@@ -293,6 +293,14 @@ func (h *Handler) GetCleaned(w http.ResponseWriter, r *http.Request) {
 	}
 	serveAsset(w, r, job.CleanedPath, "cleaned.ply")
 }
+func (h *Handler) GetIsolated(w http.ResponseWriter, r *http.Request) {
+	job, err := h.jobs.Get(r.Context(), r.PathValue("id"))
+	if err != nil || job.IsolatedPath == "" {
+		http.Error(w, "isolated splat not found", 404)
+		return
+	}
+	serveAsset(w, r, job.IsolatedPath, "isolated.ply")
+}
 
 func (h *Handler) SaveCleaned(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")

@@ -7,6 +7,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -268,5 +269,111 @@ func TestPlyRoutesAndManifestName(t *testing.T) {
 	resp.Body.Close()
 	if resp.StatusCode != 404 {
 		t.Errorf("missing manifest: status %d, want 404", resp.StatusCode)
+	}
+}
+
+func reconstructedVideoJob(t *testing.T, server *httptest.Server, name string) jobs.Job {
+	t.Helper()
+	resp := doJSON(t, "POST", server.URL+"/api/jobs", map[string]string{"name": name}, "")
+	if resp.StatusCode != 201 {
+		t.Fatalf("create status %d", resp.StatusCode)
+	}
+	var job jobs.Job
+	_ = json.NewDecoder(resp.Body).Decode(&job)
+	resp.Body.Close()
+
+	var body bytes.Buffer
+	mw := multipart.NewWriter(&body)
+	_ = mw.WriteField("profile", "fast")
+	part, _ := mw.CreateFormFile("file", "clip.mp4")
+	_, _ = part.Write([]byte("not really a video"))
+	_ = mw.Close()
+	req, _ := http.NewRequest("POST", server.URL+"/api/jobs/"+job.ID+"/video", &body)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != 202 {
+		t.Fatalf("video status %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	task := claimTask(t, server)
+	if task.Type != tasks.TypeReconstruct {
+		t.Fatalf("expected reconstruct task, got %+v", task)
+	}
+	splatPath := filepath.Join(task.Payload["attemptDir"], "splat.ply")
+	if err := os.WriteFile(splatPath, gaussianPLY(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	result := map[string]string{"splatPath": splatPath, "configPath": "", "qualityPath": "", "gaussianCount": "1", "registrationRatio": "0.9"}
+	resp = doJSON(t, "POST", server.URL+"/internal/tasks/"+task.ID+"/complete", map[string]any{"workerId": "w1", "result": result, "message": "done"}, "secret")
+	if resp.StatusCode != 200 {
+		t.Fatalf("reconstruct complete status %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+	return job
+}
+
+func TestAutoIsolateRendersWithoutCleanedAsset(t *testing.T) {
+	server, service := setupTestAPI(t)
+	defer server.Close()
+	job := reconstructedVideoJob(t, server, "Can")
+
+	resp := doJSON(t, "POST", server.URL+"/api/jobs/"+job.ID+"/render", map[string]any{"isolate": false}, "")
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("render without cleaned and without isolate: status %d, want 400", resp.StatusCode)
+	}
+
+	resp = doJSON(t, "POST", server.URL+"/api/jobs/"+job.ID+"/render", map[string]any{"isolate": true}, "")
+	resp.Body.Close()
+	if resp.StatusCode != 202 {
+		t.Fatalf("render with isolate: status %d", resp.StatusCode)
+	}
+	task := claimTask(t, server)
+	if task.Type != tasks.TypeRender || task.Payload["isolate"] != "1" || task.Payload["attemptDir"] == "" {
+		t.Fatalf("bad render task %+v", task)
+	}
+	if !strings.HasSuffix(filepath.ToSlash(task.Payload["splatPath"]), "/attempts/001/splat.ply") {
+		t.Fatalf("render source should be the reconstruction: %s", task.Payload["splatPath"])
+	}
+	isolatedPath := filepath.Join(task.Payload["attemptDir"], "isolated.ply")
+	if err := os.WriteFile(isolatedPath, gaussianPLY(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	result := map[string]string{"renderDir": task.Payload["renderDir"], "viewCount": "48", "isolatedPath": isolatedPath, "isolatedCount": "1"}
+	resp = doJSON(t, "POST", server.URL+"/internal/tasks/"+task.ID+"/complete", map[string]any{"workerId": "w1", "result": result, "message": "done"}, "secret")
+	resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("complete status %d", resp.StatusCode)
+	}
+
+	got, err := service.Get(context.Background(), job.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.State != jobs.StateRenderReady || got.IsolatedPath != isolatedPath {
+		t.Fatalf("isolated path not persisted: %+v", got)
+	}
+	if a := got.ActiveAttemptRef(); a == nil || a.IsolatedPath != isolatedPath || a.RenderOptions == nil || !a.RenderOptions.Isolate {
+		t.Fatalf("attempt isolate state not persisted: %+v", a)
+	}
+	resp = doGET(t, server.URL+"/api/jobs/"+job.ID+"/isolated.ply")
+	resp.Body.Close()
+	if resp.StatusCode != 200 || resp.Header.Get("Content-Type") != "application/octet-stream" {
+		t.Fatalf("isolated.ply: status %d content-type %q", resp.StatusCode, resp.Header.Get("Content-Type"))
+	}
+}
+
+func TestAutoIsolateRejectedForUploadedPLY(t *testing.T) {
+	server, _ := setupTestAPI(t)
+	defer server.Close()
+	job := cleanedJob(t, server, "Bottle")
+	resp := doJSON(t, "POST", server.URL+"/api/jobs/"+job.ID+"/render", map[string]any{"isolate": true}, "")
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("isolate on a PLY attempt: status %d, want 400", resp.StatusCode)
 	}
 }

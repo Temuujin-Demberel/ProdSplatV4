@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 import traceback
 
 from .client import ControlPlane, LeaseLost
 from .dataset import build_yolo_dataset
+from .isolate import isolate_gaussians
 from .lease import Cancelled, LeaseGuard
 from .reconstruct import reconstruct
 from .render import RenderOptions, render_rgba_views
@@ -41,12 +43,20 @@ class TaskRunner:
             elif task_type == "RENDER":
                 payload = task["payload"]
                 options = RenderOptions.from_payload(payload)
-                files = render_rgba_views(payload["splatPath"], payload["renderDir"], guard, options)
-                result = {
-                    "renderDir": payload["renderDir"],
-                    "viewCount": str(len(files)),
-                    "assetName": options.asset_name,
-                }
+                source = payload["splatPath"]
+                result = {"renderDir": payload["renderDir"], "assetName": options.asset_name}
+                if payload.get("isolate") == "1":
+                    attempt_dir = Path(payload["attemptDir"])
+                    isolated_path = attempt_dir / "isolated.ply"
+                    guard.update(0.03, "auto-isolating the product from its surroundings")
+                    report = isolate_gaussians(Path(source), attempt_dir / "dataset", isolated_path)
+                    with log_path.open("a", encoding="utf-8") as log:
+                        log.write(f"[ProdSplat] auto-isolate: {json.dumps(report.as_dict())}\n")
+                    source = str(isolated_path)
+                    result["isolatedPath"] = source
+                    result["isolatedCount"] = str(report.kept_count)
+                files = render_rgba_views(source, payload["renderDir"], guard, options)
+                result["viewCount"] = str(len(files))
                 message = f"{len(files)} transparent views rendered as {options.asset_name}__az*_el*.png"
             elif task_type == "DATASET":
                 payload = task["payload"]

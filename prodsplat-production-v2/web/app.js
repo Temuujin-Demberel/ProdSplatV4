@@ -107,6 +107,7 @@ function renderFormValues(root) {
     assetName: $('.assetName', root).value.trim(),
     upAxis: $('.upAxis', root).value,
     frontAzimuthDegrees: Number($('.frontAzimuth', root).value),
+    isolate: $('.isolate', root).checked,
   };
 }
 
@@ -214,7 +215,7 @@ function jobNode(job) {
   bind(root,'.openEditor',async()=>{
     const active=job.attempts?.find(a=>a.number===job.activeAttempt);
     if(!active?.splatPath && !job.cleanedPath)throw new Error('No active splat is ready.');
-    const load=job.cleanedPath?`/api/jobs/${job.id}/cleaned.ply`:`/api/jobs/${job.id}/splat.ply`;
+    const load=job.cleanedPath?`/api/jobs/${job.id}/cleaned.ply`:job.isolatedPath?`/api/jobs/${job.id}/isolated.ply`:`/api/jobs/${job.id}/splat.ply`;
     window.open(`/editor/?job=${encodeURIComponent(job.id)}&load=${encodeURIComponent(load)}`,'_blank','noopener');
   });
   bind(root,'.uploadCleaned',async()=>{
@@ -227,10 +228,15 @@ function jobNode(job) {
   assetName.value = options.assetName || defaultAssetName(job.name);
   fillSelect($('.upAxis', root), UP_AXES, options.upAxis || '+z');
   fillSelect($('.frontAzimuth', root), FRONT_AZIMUTHS, options.frontAzimuthDegrees ?? 0, value => `${value}°`);
+  const activeAttempt = job.attempts?.find(a => a.number === job.activeAttempt);
+  const isolateBox = $('.isolate', root);
+  isolateBox.disabled = !activeAttempt?.videoPath;
+  isolateBox.checked = Boolean(activeAttempt?.videoPath) && (options.isolate ?? true);
   const rememberDraft = () => renderDrafts.set(job.id, renderFormValues(root));
   assetName.oninput = rememberDraft;
   $('.upAxis', root).onchange = rememberDraft;
   $('.frontAzimuth', root).onchange = rememberDraft;
+  isolateBox.onchange = rememberDraft;
   bind(root,'.render',async()=>{
     const body = renderFormValues(root);
     await api(`/api/jobs/${job.id}/render`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});

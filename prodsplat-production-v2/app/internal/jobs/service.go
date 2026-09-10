@@ -120,6 +120,7 @@ func (s *Service) AddVideo(ctx context.Context, id, videoPath, profileName strin
 	job.State = StateReconstructing
 	job.CleanedPath = ""
 	job.RenderDir = ""
+	job.IsolatedPath = ""
 	job.DatasetZip = ""
 	job.Progress = 0
 	job.Message = "reconstruction queued"
@@ -160,6 +161,7 @@ func (s *Service) AddExistingPLY(ctx context.Context, id, splatPath string) (*Jo
 	job.State = StateReviewReady
 	job.CleanedPath = ""
 	job.RenderDir = ""
+	job.IsolatedPath = ""
 	job.DatasetZip = ""
 	job.Progress = 1
 	job.Message = "existing Gaussian PLY ready for review"
@@ -201,6 +203,7 @@ func (s *Service) ActivateAttempt(ctx context.Context, id string, number int) (*
 	job.ActiveAttempt = number
 	job.CleanedPath = selected.CleanedPath
 	job.RenderDir = selected.RenderDir
+	job.IsolatedPath = selected.IsolatedPath
 	job.DatasetZip = selected.DatasetZip
 	if selected.RenderOptions != nil {
 		options := *selected.RenderOptions
@@ -281,9 +284,6 @@ func (s *Service) StartRender(ctx context.Context, id string, requested *RenderO
 	if err != nil {
 		return nil, err
 	}
-	if job.CleanedPath == "" {
-		return nil, errors.New("save the edited/cleaned PLY before rendering")
-	}
 	if job.CurrentTaskID != "" && (job.State == StateRendering || job.State == StateDatasetBuilding || job.State == StateReconstructing) {
 		return nil, errors.New("job already has an active processing task")
 	}
@@ -297,15 +297,35 @@ func (s *Service) StartRender(ctx context.Context, id string, requested *RenderO
 	if err != nil {
 		return nil, err
 	}
+	active := job.ActiveAttemptRef()
+	source := job.CleanedPath
+	if resolved.Isolate {
+		if active == nil || active.VideoPath == "" {
+			return nil, errors.New("auto-isolate is only available for attempts reconstructed from video")
+		}
+		if source == "" {
+			source = active.SplatPath
+		}
+	}
+	if source == "" {
+		return nil, errors.New("save the edited/cleaned PLY before rendering, or enable auto-isolate on a video attempt")
+	}
+	isolate := "0"
+	if resolved.Isolate {
+		isolate = "1"
+	}
 	now := time.Now().UTC()
 	taskID := newID("task")
-	renderDir := filepath.Join(s.store.AttemptDir(id, job.ActiveAttempt), "renders")
+	attemptDir := s.store.AttemptDir(id, job.ActiveAttempt)
+	renderDir := filepath.Join(attemptDir, "renders")
 	payload := map[string]string{
-		"splatPath":           job.CleanedPath,
+		"splatPath":           source,
+		"attemptDir":          attemptDir,
 		"renderDir":           renderDir,
 		"assetName":           resolved.AssetName,
 		"upAxis":              resolved.UpAxis,
 		"frontAzimuthDegrees": strconv.FormatFloat(resolved.FrontAzimuthDegrees, 'f', -1, 64),
+		"isolate":             isolate,
 	}
 	task := &tasks.Task{ID: taskID, JobID: id, Attempt: job.ActiveAttempt, Type: tasks.TypeRender, State: tasks.StateReady, Payload: payload, MaxAttempts: 2, LogPath: s.store.TaskLogPath(id, taskID), CreatedAt: now, UpdatedAt: now}
 	if err := s.tasks.Create(ctx, task); err != nil {
@@ -315,14 +335,14 @@ func (s *Service) StartRender(ctx context.Context, id string, requested *RenderO
 	job.DatasetZip = ""
 	jobOptions := resolved
 	job.RenderOptions = &jobOptions
-	if a := job.ActiveAttemptRef(); a != nil {
-		a.DatasetZip = ""
+	if active != nil {
+		active.DatasetZip = ""
 		attemptOptions := resolved
-		a.RenderOptions = &attemptOptions
+		active.RenderOptions = &attemptOptions
 	}
 	job.State = StateRendering
 	job.Progress = 0
-	job.Message = fmt.Sprintf("transparent rendering queued (%s, up %s, front %g°)", resolved.AssetName, resolved.UpAxis, resolved.FrontAzimuthDegrees)
+	job.Message = fmt.Sprintf("transparent rendering queued (%s, up %s, front %g°, auto-isolate %s)", resolved.AssetName, resolved.UpAxis, resolved.FrontAzimuthDegrees, map[bool]string{true: "on", false: "off"}[resolved.Isolate])
 	job.Error = ""
 	job.CurrentTaskID = taskID
 	job.CancelRequested = false
@@ -570,8 +590,15 @@ func (s *Service) applyTaskSuccess(ctx context.Context, t *tasks.Task) error {
 	case tasks.TypeRender:
 		job.State = StateRenderReady
 		job.RenderDir = t.Result["renderDir"]
+		isolated := t.Result["isolatedPath"]
+		if isolated != "" {
+			job.IsolatedPath = isolated
+		}
 		if a := job.ActiveAttemptRef(); a != nil && (t.Attempt == 0 || a.Number == t.Attempt) {
 			a.RenderDir = job.RenderDir
+			if isolated != "" {
+				a.IsolatedPath = isolated
+			}
 			a.UpdatedAt = now
 		}
 	case tasks.TypeDataset:

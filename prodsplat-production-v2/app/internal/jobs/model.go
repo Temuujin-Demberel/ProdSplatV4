@@ -28,6 +28,7 @@ type RenderOptions struct {
 	AssetName           string  `json:"assetName"`
 	UpAxis              string  `json:"upAxis"`
 	FrontAzimuthDegrees float64 `json:"frontAzimuthDegrees"`
+	Isolate             bool    `json:"isolate"`
 }
 
 var UpAxes = []string{"+x", "-x", "+y", "-y", "+z", "-z"}
@@ -78,7 +79,7 @@ func ResolveRenderOptions(jobName string, requested RenderOptions) (RenderOption
 	if front < 0 || front > MaxFrontAzimuth || math.Mod(front, FrontAzimuthStep) != 0 {
 		return RenderOptions{}, errors.New("frontAzimuthDegrees must be a multiple of 22.5 between 0 and 337.5")
 	}
-	return RenderOptions{AssetName: name, UpAxis: axis, FrontAzimuthDegrees: front}, nil
+	return RenderOptions{AssetName: name, UpAxis: axis, FrontAzimuthDegrees: front, Isolate: requested.Isolate}, nil
 }
 
 type Attempt struct {
@@ -94,6 +95,7 @@ type Attempt struct {
 	CleanedPath       string         `json:"cleanedPath,omitempty"`
 	RenderDir         string         `json:"renderDir,omitempty"`
 	RenderOptions     *RenderOptions `json:"renderOptions,omitempty"`
+	IsolatedPath      string         `json:"isolatedPath,omitempty"`
 	DatasetZip        string         `json:"datasetZip,omitempty"`
 	Error             string         `json:"error,omitempty"`
 	CreatedAt         time.Time      `json:"createdAt"`
@@ -112,6 +114,7 @@ type Job struct {
 	CleanedPath     string         `json:"cleanedPath,omitempty"`
 	RenderDir       string         `json:"renderDir,omitempty"`
 	RenderOptions   *RenderOptions `json:"renderOptions,omitempty"`
+	IsolatedPath    string         `json:"isolatedPath,omitempty"`
 	BackgroundDir   string         `json:"backgroundDir,omitempty"`
 	DatasetZip      string         `json:"datasetZip,omitempty"`
 	CurrentTaskID   string         `json:"currentTaskId,omitempty"`

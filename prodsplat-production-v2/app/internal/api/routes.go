@@ -20,6 +20,7 @@ func RegisterRoutes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("POST /api/jobs/{id}/cleaned", h.SaveCleaned)
 	mux.HandleFunc("GET /api/jobs/{id}/cleaned", h.GetCleaned)
 	mux.HandleFunc("GET /api/jobs/{id}/cleaned.ply", h.GetCleaned)
+	mux.HandleFunc("GET /api/jobs/{id}/isolated.ply", h.GetIsolated)
 	mux.HandleFunc("POST /api/jobs/{id}/render", h.StartRender)
 	mux.HandleFunc("GET /api/jobs/{id}/renders/{name}", h.RenderAsset)
 	mux.HandleFunc("POST /api/jobs/{id}/backgrounds", h.UploadBackgrounds)

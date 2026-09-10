@@ -11,6 +11,7 @@ This release changes the transparent render step so its output drops straight in
 - Default render size is 1024 px; alpha is straight (un-premultiplied) as before.
 - `render_manifest.json` now records `assetName`, `upAxis`, `frontAzimuthDegrees`, `elevations`, `viewsPerRing`, `size`, `fovDegrees` and, per view, `azimuthDegrees`, `azimuthLabel`, `elevationDegrees`, camera, target and view matrix.
 - The dashboard preview grid shows all 48 views with their angle captions, loaded from the manifest, so orientation mistakes are visible before a re-render.
+- Auto-isolate (`isolate` render option, on by default for video attempts): the worker locates the product from the reconstruction cameras, keeps a cylinder around it, cuts at the densest horizontal layer below it (the table or floor) plus a margin, trims everything outside the product's footprint, writes `attempts/NNN/isolated.ply`, and renders that. A video attempt can therefore be rendered without opening SuperSplat; the editor loads the isolated asset for touch-ups. Thresholds are fractions of the camera orbit radius and can be tuned with the `PRODSPLAT_ISOLATE_*` variables.
 
 ## Fixes
 
