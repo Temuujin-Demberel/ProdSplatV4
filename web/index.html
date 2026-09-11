@@ -91,7 +91,8 @@
               <select class="frontAzimuth"></select>
             </label>
           </div>
-          <label class="checkRow"><input class="isolate" type="checkbox"> Auto-isolate: cut away the table, floor and surroundings using the reconstruction cameras, so no editor step is needed (video attempts only)</label>
+          <label class="checkRow"><input class="isolate" type="checkbox"> Auto-isolate: cut away the table, floor, surroundings and any narrower stand under the product using the reconstruction cameras, so no editor step is needed (video attempts only)</label>
+          <label class="checkRow"><input class="removeSupport" type="checkbox"> Also remove the support colour below the product's bottom edge <input class="supportColor" type="color" value="#2050c8" title="Colour of the box or stand the product sits on"></label>
           <button class="render">Render 48 RGBA views</button>
           <div class="previewGrid"></div>
         </section>

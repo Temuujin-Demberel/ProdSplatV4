@@ -29,12 +29,18 @@ func TestResolveRenderOptions(t *testing.T) {
 	if err != nil || got.AssetName != "a_b" || got.UpAxis != "-y" || got.FrontAzimuthDegrees != 337.5 {
 		t.Fatalf("explicit: %+v %v", got, err)
 	}
+	got, err = ResolveRenderOptions("Bottle", RenderOptions{SupportColor: " #1F4FD8 "})
+	if err != nil || got.SupportColor != "#1f4fd8" {
+		t.Fatalf("support colour: %+v %v", got, err)
+	}
 	invalid := []RenderOptions{
 		{AssetName: "---"},
 		{UpAxis: "+w"},
 		{FrontAzimuthDegrees: 10},
 		{FrontAzimuthDegrees: -22.5},
 		{FrontAzimuthDegrees: 360},
+		{SupportColor: "blue"},
+		{SupportColor: "#12"},
 	}
 	for _, bad := range invalid {
 		if _, err := ResolveRenderOptions("Bottle", bad); err == nil {

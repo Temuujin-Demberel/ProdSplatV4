@@ -45,17 +45,21 @@ class TaskRunner:
                 options = RenderOptions.from_payload(payload)
                 source = payload["splatPath"]
                 result = {"renderDir": payload["renderDir"], "assetName": options.asset_name}
+                manifest_extra: dict = {}
                 if payload.get("isolate") == "1":
                     attempt_dir = Path(payload["attemptDir"])
                     isolated_path = attempt_dir / "isolated.ply"
                     guard.update(0.03, "auto-isolating the product from its surroundings")
-                    report = isolate_gaussians(Path(source), attempt_dir / "dataset", isolated_path)
+                    report = isolate_gaussians(
+                        Path(source), attempt_dir / "dataset", isolated_path, payload.get("supportColor", "")
+                    )
                     with log_path.open("a", encoding="utf-8") as log:
                         log.write(f"[ProdSplat] auto-isolate: {json.dumps(report.as_dict())}\n")
                     source = str(isolated_path)
                     result["isolatedPath"] = source
                     result["isolatedCount"] = str(report.kept_count)
-                files = render_rgba_views(source, payload["renderDir"], guard, options)
+                    manifest_extra["isolation"] = report.as_dict()
+                files = render_rgba_views(source, payload["renderDir"], guard, options, manifest_extra=manifest_extra)
                 result["viewCount"] = str(len(files))
                 message = f"{len(files)} transparent views rendered as {options.asset_name}__az*_el*.png"
             elif task_type == "DATASET":

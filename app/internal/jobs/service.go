@@ -326,6 +326,7 @@ func (s *Service) StartRender(ctx context.Context, id string, requested *RenderO
 		"upAxis":              resolved.UpAxis,
 		"frontAzimuthDegrees": strconv.FormatFloat(resolved.FrontAzimuthDegrees, 'f', -1, 64),
 		"isolate":             isolate,
+		"supportColor":        resolved.SupportColor,
 	}
 	task := &tasks.Task{ID: taskID, JobID: id, Attempt: job.ActiveAttempt, Type: tasks.TypeRender, State: tasks.StateReady, Payload: payload, MaxAttempts: 2, LogPath: s.store.TaskLogPath(id, taskID), CreatedAt: now, UpdatedAt: now}
 	if err := s.tasks.Create(ctx, task); err != nil {

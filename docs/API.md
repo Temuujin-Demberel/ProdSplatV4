@@ -17,7 +17,7 @@
 - `POST /api/jobs/{id}/cleaned` — raw Gaussian PLY body
 - `GET /api/jobs/{id}/cleaned` (alias `GET /api/jobs/{id}/cleaned.ply`)
 - `GET /api/jobs/{id}/isolated.ply` — the auto-isolated asset produced by the last render with `isolate`
-- `POST /api/jobs/{id}/render` — optional JSON `{assetName, upAxis, frontAzimuthDegrees, isolate}`; no body reuses the job's last options or the defaults (sanitized job name, `+z`, `0`, `false`). With `isolate: true` a video attempt can be rendered without a cleaned PLY: the worker cuts the table, floor and surroundings away using the reconstruction cameras and writes `attempts/NNN/isolated.ply`
+- `POST /api/jobs/{id}/render` — optional JSON `{assetName, upAxis, frontAzimuthDegrees, isolate, supportColor}`; no body reuses the job's last options or the defaults (sanitized job name, `+z`, `0`, `false`, `""`). With `isolate: true` a video attempt can be rendered without a cleaned PLY: the worker cuts the table, floor, surroundings and any narrower stand under the product away using the reconstruction cameras and writes `attempts/NNN/isolated.ply`. `supportColor` (`#rrggbb`, optional) additionally removes Gaussians of that colour below the product's bottom edge. The isolation report is stored under `isolation` in `render_manifest.json`
 - `GET /api/jobs/{id}/renders/{name}` — `*.png` or `render_manifest.json`
 - `POST /api/jobs/{id}/backgrounds` — multipart repeated `files`
 - `POST /api/jobs/{id}/dataset`

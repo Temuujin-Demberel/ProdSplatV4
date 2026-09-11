@@ -108,6 +108,7 @@ function renderFormValues(root) {
     upAxis: $('.upAxis', root).value,
     frontAzimuthDegrees: Number($('.frontAzimuth', root).value),
     isolate: $('.isolate', root).checked,
+    supportColor: $('.removeSupport', root).checked ? $('.supportColor', root).value : '',
   };
 }
 
@@ -232,11 +233,23 @@ function jobNode(job) {
   const isolateBox = $('.isolate', root);
   isolateBox.disabled = !activeAttempt?.videoPath;
   isolateBox.checked = Boolean(activeAttempt?.videoPath) && (options.isolate ?? true);
+  const removeSupport = $('.removeSupport', root);
+  const supportColor = $('.supportColor', root);
+  removeSupport.checked = Boolean(options.supportColor);
+  supportColor.value = options.supportColor || '#2050c8';
+  const syncSupport = () => {
+    const isolating = isolateBox.checked && !isolateBox.disabled;
+    removeSupport.disabled = !isolating;
+    supportColor.disabled = !isolating || !removeSupport.checked;
+  };
+  syncSupport();
   const rememberDraft = () => renderDrafts.set(job.id, renderFormValues(root));
   assetName.oninput = rememberDraft;
   $('.upAxis', root).onchange = rememberDraft;
   $('.frontAzimuth', root).onchange = rememberDraft;
-  isolateBox.onchange = rememberDraft;
+  isolateBox.onchange = () => { syncSupport(); rememberDraft(); };
+  removeSupport.onchange = () => { syncSupport(); rememberDraft(); };
+  supportColor.oninput = rememberDraft;
   bind(root,'.render',async()=>{
     const body = renderFormValues(root);
     await api(`/api/jobs/${job.id}/render`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -29,9 +30,12 @@ type RenderOptions struct {
 	UpAxis              string  `json:"upAxis"`
 	FrontAzimuthDegrees float64 `json:"frontAzimuthDegrees"`
 	Isolate             bool    `json:"isolate"`
+	SupportColor        string  `json:"supportColor"`
 }
 
 var UpAxes = []string{"+x", "-x", "+y", "-y", "+z", "-z"}
+
+var hexColor = regexp.MustCompile(`^#[0-9a-f]{6}$`)
 
 const (
 	DefaultUpAxis    = "+z"
@@ -79,7 +83,11 @@ func ResolveRenderOptions(jobName string, requested RenderOptions) (RenderOption
 	if front < 0 || front > MaxFrontAzimuth || math.Mod(front, FrontAzimuthStep) != 0 {
 		return RenderOptions{}, errors.New("frontAzimuthDegrees must be a multiple of 22.5 between 0 and 337.5")
 	}
-	return RenderOptions{AssetName: name, UpAxis: axis, FrontAzimuthDegrees: front, Isolate: requested.Isolate}, nil
+	color := strings.ToLower(strings.TrimSpace(requested.SupportColor))
+	if color != "" && !hexColor.MatchString(color) {
+		return RenderOptions{}, errors.New("supportColor must be empty or a #rrggbb colour")
+	}
+	return RenderOptions{AssetName: name, UpAxis: axis, FrontAzimuthDegrees: front, Isolate: requested.Isolate, SupportColor: color}, nil
 }
 
 type Attempt struct {

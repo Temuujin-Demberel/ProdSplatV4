@@ -2,7 +2,7 @@
 
 ## 2.0.6 apu-synth render grid release
 
-The transparent render step now produces 48 views: three elevation rings (−30°, 0°, +30°) of 16 azimuths each, so a product is seen the way a shelf camera sees it and never from directly above or below. Files are named `{assetName}__az{AAA}_el{±EE}.png`, the layout apu-synth's cutout loader reads, so a job's `renders/` folder can be copied straight into `cutouts/render/`. Positive azimuth shows the product's right side and positive elevation looks down from above. The dashboard's render step takes the asset (class) name, the up axis, and a front-azimuth offset, and its preview grid shows all 48 views with their angles so orientation can be corrected and re-rendered. For video attempts an auto-isolate option (on by default) removes the table, floor and surroundings using the reconstruction cameras, so a reconstruction can be rendered straight away and SuperSplat becomes a touch-up tool rather than a required step. Two fixes: the editor loads the splat through `.ply`-suffixed routes (SuperSplat refuses URLs without a recognised extension), and the launch scripts and COLMAP wrapper are committed with their executable bit.
+The transparent render step now produces 48 views: three elevation rings (−30°, 0°, +30°) of 16 azimuths each, so a product is seen the way a shelf camera sees it and never from directly above or below. Files are named `{assetName}__az{AAA}_el{±EE}.png`, the layout apu-synth's cutout loader reads, so a job's `renders/` folder can be copied straight into `cutouts/render/`. Positive azimuth shows the product's right side and positive elevation looks down from above. The dashboard's render step takes the asset (class) name, the up axis, and a front-azimuth offset, and its preview grid shows all 48 views with their angles so orientation can be corrected and re-rendered. For video attempts an auto-isolate option (on by default) removes the table, floor and surroundings using the reconstruction cameras, so a reconstruction can be rendered straight away and SuperSplat becomes a touch-up tool rather than a required step. It also detects a stand narrower than the product and cuts it away at the product's bottom edge, and an optional support-colour picker removes a stand of a known colour. See "Capturing a product on a support" below. Two fixes: the editor loads the splat through `.ply`-suffixed routes (SuperSplat refuses URLs without a recognised extension), and the launch scripts and COLMAP wrapper are committed with their executable bit.
 
 ## 2.0.5 adaptive reconstruction release
 
@@ -177,6 +177,17 @@ The first Docker build requires internet access because it must pull the pinned 
 | `quality` | 140 | 15,000 | 1 | 1 | stronger GPU / higher-quality attempt |
 
 `balanced` preserves the validated 90-frame/8,000-iteration baseline for normal short captures. In 2.0.5 the frame count is adaptive: long videos are sampled more densely before COLMAP, and weak camera registration can trigger automatic denser sequential and bounded exhaustive rescue passes. Hardware-dependent out-of-memory behavior is still possible; no preset can guarantee that arbitrary capture resolution fits every GPU.
+
+## Capturing a product on a support
+
+The product's underside is only reconstructed where the camera can see it, so a product filmed on a table has no bottom and the table top becomes its base. Standing the product on a smaller stand fixes that and lets auto-isolate remove the stand geometrically:
+
+- footprint of the stand at most about 60% of the product's footprint, centred under it;
+- at least 15 cm tall, so the phone can be lowered below the product's bottom edge for a low pass (the render rig looks up at 30° at most);
+- matte, uniform, and a colour that does not appear on the product (pick it in the dashboard as the support colour if the stand is not clearly narrower);
+- keep the background static; the isolate step keeps everything within the product's footprint above the detected bottom edge.
+
+Products that genuinely narrow toward their base by more than 30% (a stemmed glass, a cone) trip the narrowing detector; set `PRODSPLAT_ISOLATE_NARROWING=0` for those and rely on the support colour or the editor instead.
 
 ## Workspace
 

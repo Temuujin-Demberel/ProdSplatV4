@@ -176,6 +176,7 @@ def render_rgba_views(
     guard: LeaseGuard,
     options: RenderOptions,
     size: int = DEFAULT_SIZE,
+    manifest_extra: dict | None = None,
 ) -> list[str]:
     import torch
     from gsplat import rasterization
@@ -251,7 +252,7 @@ def render_rgba_views(
                 "viewMatrix": viewmat_np.tolist(),
             })
 
-    (staging / MANIFEST_NAME).write_text(json.dumps({
+    manifest = {
         "source": str(ply_path),
         "assetName": options.asset_name,
         "upAxis": options.up_axis,
@@ -262,7 +263,10 @@ def render_rgba_views(
         "fovDegrees": FOV_DEGREES,
         "viewCount": len(created),
         "views": view_manifest,
-    }, indent=2), encoding="utf-8")
+    }
+    if manifest_extra:
+        manifest.update(manifest_extra)
+    (staging / MANIFEST_NAME).write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     guard.update(0.98, "committing rendered views")
     shutil.rmtree(output, ignore_errors=True)
     staging.rename(output)

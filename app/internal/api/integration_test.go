@@ -327,13 +327,13 @@ func TestAutoIsolateRendersWithoutCleanedAsset(t *testing.T) {
 		t.Fatalf("render without cleaned and without isolate: status %d, want 400", resp.StatusCode)
 	}
 
-	resp = doJSON(t, "POST", server.URL+"/api/jobs/"+job.ID+"/render", map[string]any{"isolate": true}, "")
+	resp = doJSON(t, "POST", server.URL+"/api/jobs/"+job.ID+"/render", map[string]any{"isolate": true, "supportColor": "#1F4FD8"}, "")
 	resp.Body.Close()
 	if resp.StatusCode != 202 {
 		t.Fatalf("render with isolate: status %d", resp.StatusCode)
 	}
 	task := claimTask(t, server)
-	if task.Type != tasks.TypeRender || task.Payload["isolate"] != "1" || task.Payload["attemptDir"] == "" {
+	if task.Type != tasks.TypeRender || task.Payload["isolate"] != "1" || task.Payload["attemptDir"] == "" || task.Payload["supportColor"] != "#1f4fd8" {
 		t.Fatalf("bad render task %+v", task)
 	}
 	if !strings.HasSuffix(filepath.ToSlash(task.Payload["splatPath"]), "/attempts/001/splat.ply") {
